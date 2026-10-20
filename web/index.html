@@ -1,0 +1,52 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>DiffChecker</title>
+    <link rel="stylesheet" href="style.css" />
+  </head>
+  <body>
+    <header class="masthead">
+      <div>
+        <h1 id="title">Loading…</h1>
+        <p id="byline" hidden></p>
+        <p id="presence" class="presence" role="status" hidden></p>
+      </div>
+      <button type="button" id="finish-open" class="finish-open" aria-expanded="false" aria-controls="finish" hidden>Done reviewing</button>
+      <form id="finish" class="finish" hidden>
+        <label for="feedback">Feedback for the agent (optional)</label>
+        <textarea id="feedback" rows="4"></textarea>
+        <div class="finish-actions">
+          <button type="submit" class="finish-send">Send and finish</button>
+          <button type="button" id="finish-cancel">Cancel</button>
+          <p class="finish-error" role="alert"></p>
+        </div>
+      </form>
+      <p id="finished" class="finished" role="status" hidden>Review sent. The agent continues in its own window; you can close this tab.</p>
+    </header>
+    <div class="layout">
+      <nav class="rail" aria-labelledby="files-heading">
+        <details id="files-box" open>
+          <summary><h2 id="files-heading">Files</h2></summary>
+          <ol id="files"></ol>
+        </details>
+      </nav>
+      <main>
+        <div id="stale" class="stale" role="status" hidden>
+          <p>The agent changed files after your review started.</p>
+        </div>
+        <section id="overview" class="account">
+          <h2>What was done</h2>
+          <p id="summary"></p>
+          <div class="why">
+            <h2>Why</h2>
+            <p id="rationale"></p>
+          </div>
+        </section>
+        <section id="diff" aria-label="Changes"></section>
+      </main>
+    </div>
+    <script type="module" src="app.js"></script>
+  </body>
+</html>

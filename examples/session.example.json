@@ -1,0 +1,11 @@
+{
+  "title": "Example: add input validation to the signup form",
+  "summary": "Added email and password checks before submitting the signup form.",
+  "rationale": "Validation runs on the client for fast feedback; the server keeps its own checks, so this is a UX change, not a security boundary.",
+  "files": [
+    { "path": "src/signup.js", "note": "New validate() call before submit." }
+  ],
+  "agent": { "name": "Claude Code", "model": "claude-opus-5-5", "effort": "high" },
+  "chat": { "command": "claude -p --model claude-opus-5-5 --effort high" },
+  "diff": "diff --git a/src/signup.js b/src/signup.js\n--- a/src/signup.js\n+++ b/src/signup.js\n@@ -1,3 +1,6 @@\n export function submit(form) {\n+  const error = validate(form);\n+  if (error) return showError(error);\n+\n   return post('/signup', form);\n }\n"
+}

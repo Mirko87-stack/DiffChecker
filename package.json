@@ -1,0 +1,29 @@
+{
+  "name": "@mirko87-stack/diffchecker",
+  "version": "0.1.0",
+  "description": "Local viewer that shows an AI agent's finished task: explanation, rationale, VS Code-style diff and per-hunk chat.",
+  "type": "module",
+  "bin": {
+    "diffchecker": "bin/codediff.js",
+    "codediff": "bin/codediff.js"
+  },
+  "scripts": {
+    "start": "node bin/codediff.js --session examples/session.example.json",
+    "test": "node --test",
+    "install-skill": "node scripts/install-skill.mjs"
+  },
+  "engines": {
+    "node": ">=20"
+  },
+  "license": "MIT",
+  "files": [
+    "bin/",
+    "src/",
+    "web/",
+    "scripts/install-skill.mjs",
+    "skill/SKILL.md",
+    "examples/session.example.json",
+    "README.md",
+    "README.ja.md"
+  ]
+}
