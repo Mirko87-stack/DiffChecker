@@ -4,6 +4,10 @@ import { parseUnifiedDiff } from "./diff-parser.js";
 import { hunkRanges } from "./hunks.js";
 import { renderMarkdown } from "./markdown.js";
 import { attachHunkAsk, createDiffView, disposeDiffView, loadMonaco } from "./monaco-view.js";
+import { initSidebar } from "./sidebar.js";
+
+// Before any await: the stored rail width and hidden state apply before the session renders.
+initSidebar();
 
 // One id per page load, so the server can tell a reload (a new tab beats at once) from a closed tab.
 let tab = newTabId(); // replaced when the page comes back from the back/forward cache

@@ -26,12 +26,15 @@
       <p id="finished" class="finished" role="status" hidden>Review sent. The agent continues in its own window; you can close this tab.</p>
     </header>
     <div class="layout">
-      <nav class="rail" aria-labelledby="files-heading">
+      <nav class="rail" id="files-rail" aria-labelledby="files-heading">
         <details id="files-box" open>
           <summary><h2 id="files-heading">Files</h2></summary>
           <ol id="files"></ol>
         </details>
+        <button type="button" id="rail-hide" class="rail-hide" aria-controls="files-rail" aria-expanded="true">Hide files</button>
       </nav>
+      <div id="rail-handle" class="rail-handle" role="separator" aria-orientation="vertical" aria-label="Resize file list" aria-controls="files-rail" aria-valuemin="180" aria-valuemax="600" aria-valuenow="280" tabindex="0"></div>
+      <button type="button" id="rail-show" class="rail-show" aria-controls="files-rail" aria-expanded="false">Show files</button>
       <main>
         <div id="stale" class="stale" role="status" hidden>
           <p>The agent changed files after your review started.</p>

@@ -117,12 +117,65 @@ abbr[title] { text-decoration: none; }
 }
 
 /* minmax(0, 1fr): long diff lines scroll inside their pane instead of widening the page. */
+/* The gutter column holds the resize handle; sidebar.js sets --rail-width. */
 .layout {
   display: grid;
-  grid-template-columns: 280px minmax(0, 1fr);
-  gap: var(--gutter);
-  padding: 0 var(--gutter) 96px;
+  grid-template-columns: var(--rail-width, 280px) var(--gutter) minmax(0, 1fr);
+  /* The bottom space lives in main: padding here would push the sticky rail off the top at the page end. */
+  padding: 0 var(--gutter);
 }
+.layout > main { padding-bottom: 96px; }
+.layout.rail-hidden { grid-template-columns: minmax(0, 1fr); }
+.layout.rail-hidden .rail, .layout.rail-hidden .rail-handle { display: none; }
+
+/* Resize handle: invisible until hovered or focused, then a single rule the height of the screen. */
+.rail-handle {
+  position: sticky;
+  top: 0;
+  align-self: start;
+  justify-self: center;
+  width: 12px;
+  height: 100vh;
+  cursor: col-resize;
+  touch-action: none;
+}
+.rail-handle::before {
+  content: "";
+  position: absolute;
+  inset: 0 5px;
+  background: transparent;
+  transition: background-color 120ms ease-out;
+}
+.rail-handle:hover::before { background: var(--rule); }
+.rail-handle:focus-visible { outline: none; }
+.rail-handle:focus-visible::before, .rail-resizing .rail-handle::before { background: var(--highlighter); }
+.rail-resizing, .rail-resizing * { cursor: col-resize; user-select: none; }
+
+/* Hiding the list is a quiet control beside its heading. */
+.rail summary { padding-right: 96px; }
+.rail-hide {
+  position: absolute;
+  top: 29px;
+  right: 0;
+  color: var(--muted);
+}
+.rail-hide:hover { color: var(--paper); }
+
+/* With the list hidden, a vertical tab in the left gutter brings it back. */
+.rail-show {
+  display: none;
+  position: fixed;
+  top: 50%;
+  left: 8px;
+  z-index: 26;
+  padding: 12px 4px;
+  writing-mode: vertical-rl;
+  transform: translateY(-50%) rotate(180deg);
+  color: var(--muted);
+  background: var(--night);
+}
+.rail-show:hover { color: var(--paper); }
+.layout.rail-hidden .rail-show { display: block; }
 
 /* File rail */
 .rail {
@@ -482,6 +535,10 @@ pre span { display: block; padding: 0 12px; }
   .finish-open { grid-column: 1 / -1; justify-self: start; margin-top: 16px; }
   .masthead h1 { font-size: var(--step-3); }
   .layout { grid-template-columns: minmax(0, 1fr); gap: 0; }
+  /* No resizing or hiding here: the stored hidden state is ignored and the list stays reachable. */
+  .rail-handle, .rail-hide, .layout.rail-hidden .rail-show { display: none; }
+  .layout.rail-hidden .rail { display: block; }
+  .rail summary { padding-right: 0; }
   .rail {
     position: static;
     max-height: none;
@@ -505,6 +562,6 @@ pre span { display: block; padding: 0 12px; }
 }
 
 @media (prefers-reduced-motion: reduce) {
-  #files a { transition: none; }
+  #files a, .rail-handle::before { transition: none; }
   .ask { animation: none; }
 }

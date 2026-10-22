@@ -2,22 +2,234 @@
 
 **English** | [日本語](README.ja.md)
 
-Review an AI coding task before accepting it: understand what changed and why,
-inspect a VS Code-style diff, and ask the originating agent about individual hunks.
-A dependency-free Node.js CLI with a local browser UI, not a hosted service.
+Understand an AI coding task **before accepting it**: read what changed and why,
+inspect a VS Code-style diff, and ask the agent about a specific change.
+DiffChecker is a lightweight Node.js CLI with a local browser UI, not a hosted service.
 
-## Features
+## Contents
 
-- Task summary, rationale and per-file notes written by your agent.
-- Side-by-side Monaco diff, with unified-diff fallback when unavailable.
-- Per-hunk questions answered by the same agent in live mode.
-- Markdown preview and refreshed diffs after requested changes.
-- Feedback returned to the agent when you finish or close the viewer.
+- [1. Before you start](#1-before-you-start)
+- [2. Install and connect your agent](#2-install-and-connect-your-agent)
+- [3. Start your first review](#3-start-your-first-review)
+- [4. Visual guide](#4-visual-guide)
+- [5. Troubleshooting](#5-troubleshooting)
+- [6. Advanced usage](#6-advanced-usage)
+- [7. Privacy and platform support](#7-privacy-and-platform-support)
+- [8. Update and uninstall](#8-update-and-uninstall)
+- [9. Development and license](#9-development-and-license)
 
-## Requirements and platform status
+## 1. Before you start
 
-Node.js **20+**, Git and a modern browser. Install prerequisites separately;
-setup never downloads software, requests elevation or implicitly changes agent skills.
+You need **Node.js 20 or newer**, **Git**, and a modern browser.
+To ask questions about changes, you also need a coding agent such as Claude Code, Codex or Pi.
+DiffChecker does not bundle an AI model or install these prerequisites.
+
+Open **Terminal** on macOS/Linux or **PowerShell** on Windows and run:
+
+```sh
+node --version
+npm --version
+git --version
+```
+
+**Expected result:** Node prints `v20` or newer; npm and Git print version numbers.
+If a command is missing, install that prerequisite and reopen the terminal before continuing.
+
+> Installation is done once. Starting a review is repeated for each task.
+> The steps below distinguish terminal commands, agent instructions and browser actions.
+
+## 2. Install and connect your agent
+
+### Step 1 — Install DiffChecker
+
+**Where:** your terminal, in any folder. No repository clone is needed.
+
+```sh
+npm install --global git+https://github.com/Mirko87-stack/DiffChecker.git
+```
+
+**Expected result:** installation completes without an error.
+This installs the current GitHub `main` branch, not a tagged stable release or npm registry release.
+The command is `diffchecker`; `codediff` remains a compatibility alias.
+
+### Step 2 — Verify the installation
+
+```sh
+diffchecker doctor
+```
+
+**Expected result:** Node and packaged assets show `OK`, Git shows its version,
+and nothing shows `MISSING`. `Detected skill roots` lists the detected agent folders.
+If it says `none`, see [Troubleshooting](#5-troubleshooting).
+
+### Step 3 — Preview the skill destinations
+
+```sh
+diffchecker setup --dry-run
+```
+
+**Expected result:** `would write <path>` lists the destinations.
+`unchanged <path>` means the identical skill is already installed.
+This command **does not write files**. Automatic setup targets all existing agent folders:
+
+| Agent | Skill destination (`~` means your home folder) |
+| --- | --- |
+| Claude Code | `~/.claude/skills/codediff-show/SKILL.md` |
+| Codex | `~/.codex/skills/codediff-show/SKILL.md` |
+| Pi | `~/.pi/agent/skills/codediff-show/SKILL.md` |
+
+To select just one agent or a custom location, use the [explicit target instructions](#custom-skill-folder).
+
+### Step 4 — Install the skill
+
+If the previewed destinations are correct, run:
+
+```sh
+diffchecker setup
+```
+
+**Expected result:** `wrote <path>` or `unchanged <path>` for each destination.
+Installing the CLI alone does not install skills: this separate step is required.
+Different existing skill contents are refused, never silently overwritten.
+
+### Step 5 — Reload your agent
+
+Restart or reload Claude Code, Codex or Pi so it discovers `codediff-show`.
+**Setup is complete.** Keep the agent active during live reviews so it can answer questions.
+
+## 3. Start your first review
+
+### Recommended: use the agent that made the changes
+
+1. Open your Git project in your coding agent.
+2. Have the agent complete a task, leaving changes available to review.
+3. Send this instruction **in the agent chat**, not in the terminal:
+
+   ```text
+   Use the codediff-show skill to review this task. Explain what changed and why,
+   open the viewer, and keep answering my questions until I finish the review.
+   ```
+
+4. The agent opens the browser with the task explanation and diff.
+5. Follow the [visual guide](#4-visual-guide), then finish in the browser.
+
+> Answers come from the originating agent, not a separate built-in chatbot.
+> If the agent stops listening, questions may stay queued.
+
+### View only the diff, without an agent conversation
+
+In your terminal, **go to the Git project containing the changes**, then run:
+
+```sh
+diffchecker open --repo . --base HEAD
+```
+
+If the browser does not open, open the printed `DiffChecker running at ...` URL on the same computer.
+This compares working changes against `HEAD`; it does not automatically add task explanations or chat.
+Use `--session <file>` for explanations and [advanced usage](#6-advanced-usage) for manual live mode/providers.
+
+## 4. Visual guide
+
+These are **real application screenshots using sample data**.
+The example answer was supplied through the local CLI, not generated by an AI model.
+The UI labels are currently in English.
+
+### Step 1 — Understand the task and inspect files
+
+Read **What was done** (summary) and **Why** (rationale).
+Use **Files** on the left to navigate to a changed file.
+The side-by-side diff shows before/after code; a unified diff is used if Monaco cannot load.
+
+![Real DiffChecker overview with summary, rationale, file list and side-by-side diff](assets/readme/overview.png)
+
+### Step 2 — Ask about a change
+
+Use **Ask about a change** in the side-by-side view and select the relevant hunk.
+In the unified fallback, use **Ask about this change**.
+Type your question and click **Ask**; keep the originating agent active while it answers.
+After a requested correction, inspect **Show the updated diff** when available.
+
+![Real hunk conversation with a question and scripted local answer](assets/readme/hunk-chat.png)
+
+### Step 3 — Send feedback and finish
+
+In live mode, click **Done reviewing**, optionally enter feedback, then click **Send and finish**.
+Wait for **Review sent** before closing the tab.
+Feedback returns to the agent; this action does **not** commit, merge or publish code.
+
+![Real review completion form with optional feedback and Send and finish](assets/readme/finish-review.png)
+
+## 5. Troubleshooting
+
+| Symptom | Next action |
+| --- | --- |
+| `diffchecker` not found | Reopen your terminal and agent. Check npm's global executables directory is on `PATH`; `npm prefix --global` helps locate the prefix. |
+| npm permission error | Use a user-writable npm prefix or Node version manager. Setup does not request administrator access. |
+| `MISSING` in `doctor` | Fix the named prerequisite, or reinstall if a packaged asset is missing. Rerun `doctor`. |
+| No agent folder found / roots `none` | Start the agent once so its configuration exists, or use an explicit skills folder below. |
+| `Skill conflict` | Inspect and back up the named file. Remove it yourself only if appropriate, or select another target. There is no `--force`. |
+| Browser does not open | Open the printed loopback URL on the computer running DiffChecker. Use `--no-open` to skip automatic launching. |
+| Empty diff or wrong files | Check `--repo` and `--base`. Default base is `HEAD`; committed changes may require an earlier base. |
+| Queued question / disconnected agent | Return to the originating agent and ask it to continue the skill's wait/answer loop. Opening the browser is not enough. |
+| No chat provider | Use the agent skill or explicitly configure a provider below. |
+| Side-by-side editor unavailable | Monaco needs CDN access; the unified-diff fallback remains available. |
+
+## 6. Advanced usage
+
+Skip this section for the normal agent-assisted workflow.
+
+### Custom skill folder
+
+Replace the placeholder with the real **skills directory**, not a `SKILL.md` filename.
+Quote paths containing spaces. Preview first:
+
+```sh
+diffchecker setup --target "/path/to/agent/skills" --dry-run
+diffchecker setup --target "/path/to/agent/skills"
+```
+
+Repeat `--target` for multiple destinations. All targets are preflighted before writing;
+identical files are skipped, conflicting contents and unsafe linked destinations are refused.
+Unexpected filesystem failures can still interrupt setup: this is not a filesystem transaction.
+
+### Session explanations and manual live mode
+
+Add `--session <file>` using the [session JSON example](examples/session.example.json).
+The example's `chat.command` invokes Claude: adapt or remove it before use.
+Other options include `--port`, `--no-open`, `--live`, `--detach` and `--no-wake`.
+
+To act as the agent manually, run from the project being reviewed:
+
+```sh
+diffchecker open --live --detach --repo . --base HEAD --no-wake
+diffchecker wait --repo .
+```
+
+`wait` returns a question ID. Pipe an answer into `diffchecker answer --id <id> --repo .`,
+replacing `<id>` with that ID. Keep receiving and answering until `closed` or `gone`.
+After edits, run `diffchecker refresh --repo .` or answer with `--changed <file>`.
+See the [full skill instructions](skill/SKILL.md) for the protocol.
+Optional Claude session wake support is best effort, not a substitute for the live loop.
+
+### Standalone chat providers
+
+Without live mode, configure your own provider:
+
+| Provider | Configuration |
+| --- | --- |
+| CLI reading standard input | `--chat-cmd "<command>"` or session `chat.command` |
+| OpenAI-compatible endpoint | `--chat-url <url> --chat-model <model>` or session `chat.url` / `chat.model` |
+
+CLI flags override session settings. Keys come from `CODEDIFF_CHAT_API_KEY` or the environment
+variable named by `chat.apiKeyEnv`. **Never put credentials in session files.**
+Without an active live agent or configured provider, chat is unavailable.
+
+## 7. Privacy and platform support
+
+- The server listens only on `127.0.0.1`. The browser must reach that computer's loopback address; `--no-open` does not create a remotely accessible service.
+- State, answers and logs live in the reviewed project's self-ignored `.codediff/` directory.
+- Live questions go to your agent, whose provider policy applies. Configured external endpoints/CLIs receive relevant task/diff context: do not assume all source stays on-device.
+- Monaco loads pinned jsDelivr assets. Without them, the viewer uses unified diff; it is not a fully bundled offline editor.
 
 | Platform | Browser launcher | Verification |
 | --- | --- | --- |
@@ -25,96 +237,29 @@ setup never downloads software, requests elevation or implicitly changes agent s
 | macOS | `open` | Intended support; native verification pending |
 | Linux desktop | `xdg-open` | Intended support; native verification pending |
 
-Use `--no-open` on headless systems. The server binds only to `127.0.0.1`;
-the printed URL must be opened in an environment that can reach that loopback address.
+## 8. Update and uninstall
 
-## Install from GitHub
+### Update
 
-With Node.js and Git installed, run:
+1. Rerun the GitHub installation command from section 2.
+2. Run `diffchecker doctor`, then `diffchecker setup --dry-run`.
+3. Resolve skill conflicts as described above, run `diffchecker setup`, then reload the agent.
 
-```sh
-npm install --global git+https://github.com/Mirko87-stack/DiffChecker.git
-diffchecker doctor
-diffchecker setup --dry-run
-diffchecker setup
-```
+No background updater is installed.
 
-This installs the current `main` branch directly from GitHub, not a tagged stable release.
-It does not link the command to a source checkout. `codediff` is a compatibility alias.
-The package is named `@mirko87-stack/diffchecker`; no npm registry publication is required.
-For permission errors, use a user-writable npm prefix or Node version manager, not automatic
-elevation. If the command is missing, check the npm global bin PATH and restart your agent/terminal.
-
-## Configure your agent
-
-Setup detects existing Claude Code (`~/.claude`), Codex (`~/.codex`) and Pi (`~/.pi/agent`)
-directories and installs `skills/codediff-show/SKILL.md` below them. Reload/restart the agent
-if needed. You can select a skills directory explicitly; quote paths containing spaces:
-
-```sh
-diffchecker setup --target "/path/to/agent/skills" --dry-run
-diffchecker setup --target "/path/to/agent/skills"
-```
-
-Repeat `--target` for multiple directories. All targets are preflighted before writing;
-identical files are skipped, differing files and linked destinations are refused.
-Inspect and back up conflicting skills before removing them yourself or choosing another target.
-There is no `--force`. Unexpected filesystem failures can still interrupt installation;
-this is not a filesystem transaction. Installed skills use `diffchecker`, not a checkout path.
-
-Tell your agent: **“Use the codediff-show skill to review this task.”** Live review requires
-the originating agent to keep receiving and answering questions. No AI model is bundled;
-optional Claude session wake support is best effort.
-
-## Usage
-
-From a Git repository with changes:
-
-```sh
-diffchecker open --repo . --base HEAD
-```
-
-Add `--session <file>` for the task explanation; see [sample JSON](examples/session.example.json).
-Options include `--port`, `--no-open`, `--live`, `--detach` and `--no-wake`; `--base` defaults to `HEAD`.
-For manual live mode, start `diffchecker open --live --detach --repo .`, then receive questions with
-`diffchecker wait --repo .` and pipe answers into `diffchecker answer --id <id> --repo .`.
-Keep waiting/answering until `closed` or `gone`. After edits, use `diffchecker refresh --repo .`
-or `answer --changed <file>`. Full instructions: [codediff-show](skill/SKILL.md).
-
-Without live mode, configure your own provider:
-
-| Provider | Configuration |
-| --- | --- |
-| CLI reading stdin | `--chat-cmd "<command>"` or session `chat.command` |
-| OpenAI-compatible endpoint | `--chat-url <url> --chat-model <model>` or session `chat.url` / `chat.model` |
-
-CLI flags override session settings. Keys come from `CODEDIFF_CHAT_API_KEY` or the environment
-variable named by `chat.apiKeyEnv`. Never put credentials in sessions. No provider means no standalone chat.
-
-## Privacy and offline behavior
-
-State, answers and logs live in the reviewed repository's self-ignored `.codediff/` directory.
-Live questions go to your agent, whose provider policy applies. Configured external chat
-endpoints/CLIs receive relevant task and diff context: do not assume source always stays on-device.
-Monaco loads pinned jsDelivr assets; offline the viewer falls back to unified diff.
-Local rendering is not a fully offline editor bundle.
-
-## Update and uninstall
-
-To update, rerun the GitHub installation command. For local builds, pack the new version
-and install its tarball globally again. Run
-`diffchecker doctor` and `diffchecker setup --dry-run` before setup; changed skills need
-explicit conflict resolution as described above. No background updater is installed.
+### Uninstall
 
 ```sh
 npm uninstall --global @mirko87-stack/diffchecker
 ```
 
-Uninstall removes npm launchers, not agent skills or review data. Inspect and remove only
-the `codediff-show` skill you installed in each selected directory, backing up personal edits.
-Existing `.codediff/` sessions remain yours to retain or remove.
+This removes npm launchers, **not** agent skills or review data.
+Inspect each installed `codediff-show` skill and back up personal edits before removing it yourself.
+Existing `.codediff/` sessions are yours to retain or remove.
 
-## Development
+## 9. Development and license
+
+For contributors working in a checkout:
 
 ```sh
 npm test
@@ -122,15 +267,10 @@ node bin/codediff.js doctor
 npm start
 ```
 
-No npm dependencies or build step. Development notes, task plans and local agent instructions
-are intentionally excluded from the public snapshot and npm artifact.
+No npm dependencies or build step. For a local install without a source-directory link,
+run `npm pack`, then install the printed tarball with `npm install --global ./<filename>.tgz`.
+For local updates, pack and install the new tarball again.
+Development notes, task plans and local agent instructions are excluded from the public snapshot
+and npm artifact. Screenshots are in this repository under `assets/readme/`.
 
-To install a local checkout without a source-directory link, run `npm pack` and then
-`npm install --global ./mirko87-stack-diffchecker-0.1.0.tgz` from its directory.
-Use the filename printed by `npm pack` if the version changes.
-
-## License and release status
-
-Licensed under the [MIT License](LICENSE), matching the license already selected in the public
-GitHub repository. Installation uses the source repository rather than an npm registry release.
-Native macOS/Linux acceptance is pending.
+Licensed under the [MIT License](LICENSE). Native macOS/Linux acceptance remains pending.

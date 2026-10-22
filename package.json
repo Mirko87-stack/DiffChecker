@@ -23,6 +23,7 @@
     "scripts/install-skill.mjs",
     "skill/SKILL.md",
     "examples/session.example.json",
+    "assets/readme/",
     "README.md",
     "README.ja.md"
   ]
