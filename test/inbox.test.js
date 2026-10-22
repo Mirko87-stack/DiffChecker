@@ -157,3 +157,35 @@ test("an inbox that is not listening does not break the review", async (t) => {
   assert.equal(status.queued, 1);
   assert.deepEqual(status.wake, { available: true, lastNotifiedAt: null });
 });
+
+test("a review closed while no agent poll is pending sends one note, never the feedback", async (t) => {
+  const inbox = await fakeInbox(t);
+  const { call, url, repo } = await liveWithWake(t, { wake: { socket: inbox.socket, token: "tok" } });
+  await call("api/review/close", { feedback: "The secret sauce is wrong" });
+  assert.ok(await until(() => inbox.messages.length === 1));
+  assert.equal(
+    noteText(inbox.messages[0]),
+    `DiffChecker: the review at ${url} was closed by the reviewer. Run: node "${BIN}" wait --repo "${resolve(repo)}" to get the feedback.`,
+  );
+  await pause(200);
+  assert.equal(inbox.messages.length, 1);
+});
+
+test("no close note when an agent poll receives the closed reply", async (t) => {
+  const inbox = await fakeInbox(t);
+  const { call } = await liveWithWake(t, { wake: { socket: inbox.socket, token: "tok" } });
+  const waiting = call("api/agent/next?timeout=5");
+  await pause(50);
+  await call("api/review/close", { feedback: "ok" });
+  assert.equal((await waiting).body.status, "closed");
+  await pause(200);
+  assert.equal(inbox.messages.length, 0);
+});
+
+test("stopping the server sends no close note", async (t) => {
+  const inbox = await fakeInbox(t);
+  const { call } = await liveWithWake(t, { wake: { socket: inbox.socket, token: "tok" } });
+  await call("api/shutdown", {});
+  await pause(200);
+  assert.equal(inbox.messages.length, 0);
+});

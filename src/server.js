@@ -18,11 +18,12 @@ const DEFAULT_AGENT_WAIT_S = 540;
 
 // live: questions go to the agent that opened the viewer (see bridge.js) instead of a chat provider.
 // onClosedDelivered runs once the agent has received the "closed" reply; the CLI exits there.
+// onClosed(payload) runs once when the review closes for any reason; onShutdown after POST /api/shutdown.
 // inlineDiff: the session file carried its own diff, so there is no git diff to reload.
 // wake: the inbox of the Claude Code session that opened the viewer (see inbox.js), live mode only.
 export function startServer({
   session, chat, repo, base = "HEAD", port = 0, live = false, inlineDiff = false, bridge: bridgeOptions, onClosedDelivered,
-  wake = null, wakeReminderMs, binPath = BIN,
+  onClosed, onShutdown, wake = null, wakeReminderMs, binPath = BIN,
 }) {
   let diffPaths;
   let deleted;
@@ -39,8 +40,15 @@ export function startServer({
     return `DiffChecker: ${count} review question(s) waiting in the viewer at ${serverUrl}. `
       + `Run: node "${binPath}" wait ${target} — answer each question, then run wait again until it prints closed.`;
   };
+  // Only the reviewer's own closing is worth a note; the feedback itself is fetched with wait.
+  const closedMessage = (reason) => {
+    if (reason !== "reviewer finished" && reason !== "viewer closed") return null;
+    const target = repo ? `--repo "${resolve(repo)}"` : `--url "${serverUrl}"`;
+    return `DiffChecker: the review at ${serverUrl} was closed by the reviewer. `
+      + `Run: node "${binPath}" wait ${target} to get the feedback.`;
+  };
   const bridge = createBridge({
-    session, ...bridgeOptions, wake: live ? wake : null, wakeMessage, reminderMs: wakeReminderMs,
+    session, ...bridgeOptions, wake: live ? wake : null, wakeMessage, closedMessage, reminderMs: wakeReminderMs, onClosed,
   });
 
   // The agent edited files (a fix the reviewer asked for): reload the diff so the viewer is not stale.
@@ -155,6 +163,15 @@ export function startServer({
       return sendJson(res, 200, { ok: true });
     }
 
+    // Sent by `stop` and by a newer `open` for the same repo; the server listens on loopback only anyway.
+    if (path === "/api/shutdown" && req.method === "POST") {
+      await readBody(req);
+      if (!isLoopback(req.socket.remoteAddress)) return sendJson(res, 403, { error: "Local requests only." });
+      bridge.close("", "stopped");
+      if (onShutdown) res.on("finish", onShutdown);
+      return sendJson(res, 200, { ok: true });
+    }
+
     if (path === "/api/heartbeat" && req.method === "POST") {
       // sendBeacon posts text/plain, so the body is parsed whatever its content type.
       const body = await readJson(req);
@@ -233,6 +250,10 @@ function deletedPaths(diff) {
 function sendJson(res, status, body) {
   res.writeHead(status, { "content-type": "application/json" });
   res.end(JSON.stringify(body));
+}
+
+function isLoopback(address = "") {
+  return address === "127.0.0.1" || address === "::1" || address === "::ffff:127.0.0.1";
 }
 
 function isQuestion(body) {

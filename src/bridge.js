@@ -5,7 +5,10 @@ import { createNudger } from "./inbox.js";
 
 // Browsers throttle timers in background tabs to about once a minute, so a hidden tab gets a longer grace.
 // closingGraceMs: after the last tab says it is closing; a reload reconnects well within it.
-// wake: the owning session's inbox ({ socket, token }) or null; wakeMessage(count) builds the note.
+// wake: the owning session's inbox ({ socket, token }) or null; wakeMessage(count) builds the note,
+// closedMessage(reason) the note sent when the review closes with no poll waiting (null: no note).
+// idleTimeoutMs: close as "idle" when no page ever beat and no agent polled for that long; 0 disables.
+// onClosed(payload) runs once, with the reply a poll would get, whatever closed the review.
 export function createBridge({
   session,
   heartbeatGraceMs = 45_000,
@@ -14,7 +17,10 @@ export function createBridge({
   listeningWindowMs = 15_000,
   wake = null,
   wakeMessage = (count) => `DiffChecker: ${count} review question(s) waiting in the viewer.`,
+  closedMessage = () => null,
   reminderMs,
+  idleTimeoutMs = 30 * 60_000,
+  onClosed,
 } = {}) {
   const questions = new Map(); // id -> { id, file, hunk, question, askedAt, state, answer }
   const answerWaiters = new Map(); // id -> Set of resolve functions
@@ -26,9 +32,25 @@ export function createBridge({
   // A closing tab turns hidden first, so its last beat can arrive after the beacon; a reload gets a new id.
   const closedTabs = new Set();
   let closingTimer = null;
+  let pageSeen = false; // once a page has beaten, the tab timers decide when the review ends
+  let idleTimer = null;
 
   const inState = (state) => [...questions.values()].filter((q) => q.state === state);
-  const nudger = createNudger({ wake, message: wakeMessage, queued: () => inState("queued").length, reminderMs });
+  const nudger = createNudger({ wake, message: wakeMessage, closedMessage, queued: () => inState("queued").length, reminderMs });
+
+  // A pending poll is activity too, so the clock restarts when it ends rather than cutting it short.
+  function armIdle() {
+    clearTimeout(idleTimer);
+    idleTimer = null;
+    if (!idleTimeoutMs || pageSeen || closed) return;
+    idleTimer = setTimeout(() => (agentPoll ? armIdle() : close("", "idle")), idleTimeoutMs);
+    idleTimer.unref?.();
+  }
+
+  function pageArrived() {
+    pageSeen = true;
+    armIdle();
+  }
 
   // The browser is long-polling for an answer; tell it the question moved on, or got its answer.
   function notify(q, reply) {
@@ -80,6 +102,7 @@ export function createBridge({
     clearTimeout(timer);
     lastSeen = Date.now();
     resolve(reply);
+    armIdle();
   }
 
   function stopTabTimers() {
@@ -98,9 +121,15 @@ export function createBridge({
     if (closed) return;
     closed = { feedback, reason };
     stopTabTimers();
+    armIdle();
     nudger.dispose();
-    endPoll(closedPayload());
+    const payload = closedPayload();
+    onClosed?.(payload);
+    if (agentPoll) endPoll(payload);
+    else nudger.reviewClosed(reason);
   }
+
+  armIdle();
 
   return {
     ask({ file, hunk, question }) {
@@ -140,6 +169,7 @@ export function createBridge({
     next(timeoutMs) {
       lastSeen = Date.now();
       nudger.polled();
+      armIdle();
       if (closed) return { promise: Promise.resolve(closedPayload()), cancel() {} };
       const first = inState("delivered")[0] ?? inState("queued")[0];
       if (first) return { promise: Promise.resolve(questionPayload(first)), cancel() {} };
@@ -156,6 +186,7 @@ export function createBridge({
         clearTimeout(poll.timer);
         agentPoll = null;
         lastSeen = Date.now();
+        armIdle();
       };
       return { promise, cancel };
     },
@@ -182,6 +213,7 @@ export function createBridge({
     // A tab's heartbeat; once every tab that ever beat has gone silent, the viewer was closed.
     heartbeat({ tab = "default", hidden = false } = {}) {
       if (closed || closedTabs.has(tab)) return;
+      pageArrived();
       clearTimeout(closingTimer);
       closingTimer = null;
       dropTab(tab);
@@ -196,6 +228,7 @@ export function createBridge({
     // The tab is unloading. Closing and reloading look alike here, so wait briefly for a new beat.
     closing({ tab = "default" } = {}) {
       if (closed) return;
+      pageArrived();
       dropTab(tab);
       if (tab !== "default") closedTabs.add(tab);
       if (tabs.size > 0 || closingTimer) return;
@@ -223,6 +256,7 @@ export function createBridge({
     // Ends every pending long-poll so the HTTP server can shut down.
     dispose() {
       stopTabTimers();
+      clearTimeout(idleTimer);
       nudger.dispose();
       endPoll({ status: "idle" });
       for (const [id, waiters] of answerWaiters) for (const done of [...waiters]) done({ pending: true, state: questions.get(id).state });

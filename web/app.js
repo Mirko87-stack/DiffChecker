@@ -11,9 +11,10 @@ initSidebar();
 
 // One id per page load, so the server can tell a reload (a new tab beats at once) from a closed tab.
 let tab = newTabId(); // replaced when the page comes back from the back/forward cache
-// Status first: a live page beats before the slower session load, so a reload reconnects within the server's grace.
+// Status first: the page beats before the slower session load, so a reload reconnects within the server's grace.
+// Every mode beats: the server ends (and a non-live viewer exits) once no tab is left.
 let review = await fetch("/api/status").then((res) => res.json()).catch(() => ({ live: false }));
-if (review.live && !review.closed) beat();
+if (!review.closed) startHeartbeat();
 let session = await (await fetch("/api/session")).json();
 let revision = session.revision ?? 0; // which reload of the diff this page shows
 document.getElementById("title").textContent = session.title;
@@ -522,7 +523,7 @@ const stale = document.getElementById("stale");
 stale.append(showUpdatedButton());
 if (review.live) startLiveReview();
 
-// Presence polling, the heartbeat that tells the server the tab is still open, and "Done reviewing".
+// Presence polling and "Done reviewing".
 function startLiveReview() {
   const openButton = document.getElementById("finish-open");
   const panel = document.getElementById("finish");
@@ -576,22 +577,9 @@ function startLiveReview() {
   const agentReach = () => (agentListening() ? "listening" : agentNotified() ? "notified" : "away");
   let lastReach = agentReach();
   showPresence();
-  const timers = [setInterval(beat, 10_000), setInterval(() => !document.hidden && poll(), 5_000)];
+  const timers = [setInterval(() => !document.hidden && poll(), 5_000)];
   document.addEventListener("visibilitychange", () => {
-    if (review.closed) return;
-    beat();
-    if (!document.hidden) poll();
-  });
-  // Closing, reloading and leaving for another page (even into the back/forward cache) all fire pagehide;
-  // the server waits a few seconds for a new tab before ending.
-  addEventListener("pagehide", () => {
-    if (!review.closed) navigator.sendBeacon("/api/heartbeat?closing=1", JSON.stringify({ tab }));
-  });
-  // Back from the back/forward cache: the old tab id said it was closing, so come back as a new tab.
-  addEventListener("pageshow", (event) => {
-    if (!event.persisted || review.closed) return;
-    tab = newTabId();
-    beat();
+    if (!review.closed && !document.hidden) poll();
   });
 
   function finish(message) {
@@ -606,7 +594,26 @@ function startLiveReview() {
   }
 }
 
-// Tells the server this tab is still open; function declarations so the module top can call them.
+// The heartbeat that tells the server the tab is still open; it stops once the review is closed.
+// Runs from the module top, before session and the UI exist, so it touches only review and tab.
+function startHeartbeat() {
+  beat();
+  setInterval(() => !review.closed && beat(), 10_000);
+  document.addEventListener("visibilitychange", () => !review.closed && beat());
+  // Closing, reloading and leaving for another page (even into the back/forward cache) all fire pagehide;
+  // the server waits a few seconds for a new tab before ending.
+  addEventListener("pagehide", () => {
+    if (!review.closed) navigator.sendBeacon("/api/heartbeat?closing=1", JSON.stringify({ tab }));
+  });
+  // Back from the back/forward cache: the old tab id said it was closing, so come back as a new tab.
+  addEventListener("pageshow", (event) => {
+    if (!event.persisted || review.closed) return;
+    tab = newTabId();
+    beat();
+  });
+}
+
+// Function declarations so the module top can call them.
 function beat() {
   fetch("/api/heartbeat", {
     method: "POST",

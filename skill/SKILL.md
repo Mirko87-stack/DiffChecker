@@ -73,8 +73,10 @@ permissions; it only asks you to resume the loop. Pass `--no-wake` to `open` to 
      before but never answered it (a lost reply or an interrupted turn): answer it now.
    - `{ "status": "idle" }` — nobody asked yet; run `wait` again.
    - `{ "status": "closed", "feedback", "reason", "transcript" }` — the review is over; go to
-     step 5.
-   - `{ "status": "gone" }` — the viewer is no longer running; go to step 5.
+     step 5. The viewer exits a minute after the review closes (or after 30 minutes with no
+     visit and no `wait`, reason `idle`), but it saves this reply first: a later `wait` still
+     prints it once.
+   - `{ "status": "gone" }` — the viewer is no longer running and left no reply; go to step 5.
 
 4. Answer from your own context: concise, in the reviewer's language, citing the file and
    lines. Markdown is rendered. Pass the text on stdin, so quotes and newlines need no escaping:
@@ -115,6 +117,9 @@ permissions; it only asks you to resume the loop. Pass `--no-wake` to `open` to 
 5. Stop looping. Summarise the reviewer's feedback (and the questions in `transcript`) for the
    user, then act on it here in the CLI. An empty feedback with reason `viewer closed` means
    the tab was closed without a message: ask the user how they want to proceed.
+   If the session wakes you with a note that the review was closed, run the `wait` it names.
+   To end a viewer early, run `diffchecker stop --repo "<repo>"`; a new `open` on the same
+   repository stops the previous viewer by itself.
 
 ## Without live mode
 
@@ -141,4 +146,5 @@ diffchecker --repo "<repo>" --session "<repo>/.codediff/session.json" --base HEA
 ```
 
 `--chat-cmd "<command>"` or `--chat-url <url> --chat-model <model>` override the session `chat`
-field. Then tell the user the URL and wait for their review.
+field. Then tell the user the URL and wait for their review. The viewer exits by itself once the
+reviewer closes its last tab.

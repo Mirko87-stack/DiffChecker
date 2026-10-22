@@ -34,13 +34,14 @@ export function postToInbox({ socket, token, text, timeoutMs = 5000 }) {
 // The nudge rule: one note when a question is queued and no agent poll is pending, nothing more
 // while that note is unanswered by a poll, except one reminder after reminderMs if questions are
 // still queued. message(count) builds the note; queued() counts the queued questions.
-export function createNudger({ wake, message, queued, reminderMs = 180_000, post = postToInbox }) {
+// closedMessage(reason) builds the note for a review that closed with no poll waiting, or null for none.
+export function createNudger({ wake, message, closedMessage = () => null, queued, reminderMs = 180_000, post = postToInbox }) {
   let outstanding = false;
   let lastNotifiedAt = null;
   let reminder = null;
 
-  function send() {
-    post({ ...wake, text: message(queued()) }).then(
+  function send(text = message(queued())) {
+    post({ ...wake, text }).then(
       () => (lastNotifiedAt = Date.now()),
       (error) => console.error(`[wake] could not notify the agent's session: ${error.message}`),
     );
@@ -60,6 +61,12 @@ export function createNudger({ wake, message, queued, reminderMs = 180_000, post
     polled() {
       outstanding = false;
       clearTimeout(reminder);
+    },
+
+    // The review closed while the agent was not polling, so nobody would learn of it otherwise.
+    reviewClosed(reason) {
+      const text = wake && closedMessage(reason);
+      if (text) send(text);
     },
 
     // lastNotifiedAt: ms since the last note was delivered, null if none was.

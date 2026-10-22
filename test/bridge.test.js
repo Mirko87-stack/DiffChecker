@@ -354,3 +354,91 @@ test("a session with an inline diff cannot be refreshed", async (t) => {
   const { call: inlineCall } = await liveGit(t, { inlineDiff: true });
   assert.equal((await inlineCall("api/agent/refresh", {})).status, 409);
 });
+
+// The CLI hooks onClosed to write the result file and schedule its exit.
+async function lifecycle(t, bridge = {}) {
+  const closings = [];
+  const shutdowns = [];
+  const { server, url } = await startServer({
+    session, live: true, port: 0, bridge: { heartbeatGraceMs: 200, ...bridge },
+    onClosed: (payload) => closings.push(payload), onShutdown: () => shutdowns.push(Date.now()),
+  });
+  t.after(() => server.close());
+  const call = async (path, body) => {
+    const res = await fetch(`${url}${path}`, body === undefined
+      ? {}
+      : { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify(body) });
+    return { status: res.status, body: await res.json() };
+  };
+  const closed = async () => (await call("api/status")).body.closed;
+  const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
+  return { call, closings, shutdowns, closed, sleep };
+}
+
+test("onClosed fires once with the closed payload when the reviewer finishes", async (t) => {
+  const { call, closings, sleep } = await lifecycle(t);
+  await call("api/chat", { file: "a.js", hunk, question: "Why?" });
+  await call("api/review/close", { feedback: "Ship it" });
+  await call("api/review/close", { feedback: "Again" });
+  await sleep(50);
+  assert.deepEqual(closings, [{
+    status: "closed",
+    feedback: "Ship it",
+    reason: "reviewer finished",
+    transcript: [{ file: "a.js", hunkHeader: "@@ -1 +1 @@", question: "Why?", answer: null }],
+  }]);
+});
+
+test("onClosed reports a viewer that stopped beating", async (t) => {
+  const { call, closings, sleep } = await lifecycle(t);
+  await call("api/heartbeat", { tab: "a" });
+  await sleep(400);
+  assert.equal(closings.length, 1);
+  assert.equal(closings[0].reason, "viewer closed");
+});
+
+test("an idle timeout closes a review nobody visited or polled", async (t) => {
+  const { closings, closed, sleep } = await lifecycle(t, { idleTimeoutMs: 150 });
+  await sleep(400);
+  assert.equal(await closed(), true);
+  assert.equal(closings.length, 1);
+  assert.equal(closings[0].reason, "idle");
+  assert.equal(closings[0].feedback, "");
+});
+
+test("a heartbeat cancels the idle timeout", async (t) => {
+  const { call, closings, closed, sleep } = await lifecycle(t, { idleTimeoutMs: 150, heartbeatGraceMs: 5000 });
+  await call("api/heartbeat", { tab: "a" });
+  await sleep(400);
+  assert.equal(await closed(), false);
+  assert.equal(closings.length, 0);
+});
+
+test("an agent poll resets the idle timeout, and a pending poll holds it off", async (t) => {
+  const { call, closings, closed, sleep } = await lifecycle(t, { idleTimeoutMs: 400 });
+  await sleep(250);
+  assert.deepEqual((await call("api/agent/next?timeout=0")).body, { status: "idle" });
+  await sleep(250);
+  assert.equal(await closed(), false, "the poll restarted the idle clock");
+  assert.deepEqual((await call("api/agent/next?timeout=0.6")).body, { status: "idle" }, "a pending poll is not cut short");
+  assert.equal(await closed(), false);
+  await sleep(700);
+  assert.equal(await closed(), true);
+  assert.equal(closings[0].reason, "idle");
+});
+
+test("an idle timeout of 0 never closes the review", async (t) => {
+  const { closed, sleep } = await lifecycle(t, { idleTimeoutMs: 0 });
+  await sleep(200);
+  assert.equal(await closed(), false);
+});
+
+test("shutdown closes the review as stopped and asks the process to exit", async (t) => {
+  const { call, closings, shutdowns, closed, sleep } = await lifecycle(t);
+  assert.deepEqual(await call("api/shutdown", {}), { status: 200, body: { ok: true } });
+  await sleep(50);
+  assert.equal(await closed(), true);
+  assert.equal(closings.length, 1);
+  assert.equal(closings[0].reason, "stopped");
+  assert.equal(shutdowns.length, 1);
+});

@@ -16,7 +16,7 @@ export function runSetupCommand(command, args) {
       return;
     }
     if (command === "--help") {
-      console.log("DiffChecker\nUsage: diffchecker [open|wait|answer|refresh] [options]\n       diffchecker setup [--target <skills-directory>] [--dry-run]\n       diffchecker doctor\n       diffchecker --version\nSetup is explicit; installation never changes agent skills automatically.");
+      console.log("DiffChecker\nUsage: diffchecker [open|wait|answer|refresh|stop] [options]\n       diffchecker setup [--target <skills-directory>] [--dry-run]\n       diffchecker doctor\n       diffchecker --version\nSetup is explicit; installation never changes agent skills automatically.");
       return;
     }
     const nodeOk = Number(process.versions.node.split(".")[0]) >= 20;

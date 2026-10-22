@@ -210,6 +210,7 @@ replacing `<id>` with that ID. Keep receiving and answering until `closed` or `g
 After edits, run `diffchecker refresh --repo .` or answer with `--changed <file>`.
 See the [full skill instructions](skill/SKILL.md) for the protocol.
 Optional Claude session wake support is best effort, not a substitute for the live loop.
+The viewer stops by itself after the review ends (a later `wait` still gets the feedback) or after 30 minutes unvisited; `diffchecker stop --repo .` stops it now.
 
 ### Standalone chat providers
 
