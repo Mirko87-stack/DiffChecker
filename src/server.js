@@ -42,8 +42,11 @@ export function startServer({
   };
   // Only the reviewer's own closing is worth a note; the feedback itself is fetched with wait.
   const closedMessage = (reason) => {
-    if (reason !== "reviewer finished" && reason !== "viewer closed") return null;
     const target = repo ? `--repo "${resolve(repo)}"` : `--url "${serverUrl}"`;
+    if (reason === "reviewer approved") {
+      return `DiffChecker: the reviewer approved the review at ${serverUrl}. Run: node "${binPath}" wait ${target} to get the result.`;
+    }
+    if (reason !== "reviewer finished" && reason !== "viewer closed") return null;
     return `DiffChecker: the review at ${serverUrl} was closed by the reviewer. `
       + `Run: node "${binPath}" wait ${target} to get the feedback.`;
   };
@@ -157,9 +160,15 @@ export function startServer({
       return sendJson(res, 200, reloaded === undefined ? { ok: true } : { ok: true, revision: reloaded });
     }
 
+    // No decision means "changes": that is what the Done reviewing form meant before approvals existed.
     if (path === "/api/review/close" && req.method === "POST") {
       const body = await readJson(req);
-      bridge.close(typeof body?.feedback === "string" ? body.feedback : "");
+      const decision = body?.decision === undefined ? "changes" : body.decision;
+      if (decision !== "approved" && decision !== "changes") {
+        return sendJson(res, 400, { error: "decision must be approved or changes." });
+      }
+      const reason = decision === "approved" ? "reviewer approved" : "reviewer finished";
+      bridge.close(typeof body?.feedback === "string" ? body.feedback : "", reason, decision);
       return sendJson(res, 200, { ok: true });
     }
 

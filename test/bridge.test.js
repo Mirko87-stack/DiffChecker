@@ -152,12 +152,36 @@ test("closing with feedback ends the agent loop with a transcript", async (t) =>
     status: "closed",
     feedback: "Looks good",
     reason: "reviewer finished",
+    decision: "changes",
     transcript: [{ file: "a.js", hunkHeader: "@@ -1 +1 @@", question: "Why?", answer: "Because." }],
   });
   await new Promise((r) => setTimeout(r, 50));
   assert.equal(delivered.length, 1);
   assert.equal((await call("api/status")).body.closed, true);
   assert.equal((await call("api/chat", { file: "a.js", hunk, question: "Late?" })).status, 409);
+});
+
+test("approving ends the agent loop with decision approved", async (t) => {
+  const { call } = await live(t);
+  const waiting = call("api/agent/next?timeout=5");
+  await new Promise((r) => setTimeout(r, 50));
+  assert.equal((await call("api/review/close", { decision: "approved" })).status, 200);
+  assert.deepEqual((await waiting).body, {
+    status: "closed",
+    feedback: "",
+    reason: "reviewer approved",
+    decision: "approved",
+    transcript: [],
+  });
+});
+
+test("an unknown decision is refused and the review stays open", async (t) => {
+  const { call } = await live(t);
+  assert.equal((await call("api/review/close", { decision: "merge" })).status, 400);
+  assert.equal((await call("api/review/close", { decision: null })).status, 400);
+  assert.equal((await call("api/status")).body.closed, false);
+  assert.equal((await call("api/review/close", { decision: "changes" })).status, 200);
+  assert.equal((await call("api/agent/next?timeout=1")).body.decision, "changes");
 });
 
 test("a viewer that stops sending heartbeats closes the review", async (t) => {
@@ -167,6 +191,7 @@ test("a viewer that stops sending heartbeats closes the review", async (t) => {
   assert.equal(next.body.status, "closed");
   assert.equal(next.body.feedback, "");
   assert.equal(next.body.reason, "viewer closed");
+  assert.equal(next.body.decision, null);
 });
 
 test("a hidden tab gets the longer grace", async (t) => {
@@ -385,6 +410,7 @@ test("onClosed fires once with the closed payload when the reviewer finishes", a
     status: "closed",
     feedback: "Ship it",
     reason: "reviewer finished",
+    decision: "changes",
     transcript: [{ file: "a.js", hunkHeader: "@@ -1 +1 @@", question: "Why?", answer: null }],
   }]);
 });
@@ -395,6 +421,16 @@ test("onClosed reports a viewer that stopped beating", async (t) => {
   await sleep(400);
   assert.equal(closings.length, 1);
   assert.equal(closings[0].reason, "viewer closed");
+  assert.equal(closings[0].decision, null);
+});
+
+test("onClosed carries an approval", async (t) => {
+  const { call, closings, sleep } = await lifecycle(t);
+  await call("api/review/close", { decision: "approved" });
+  await sleep(50);
+  assert.equal(closings.length, 1);
+  assert.equal(closings[0].reason, "reviewer approved");
+  assert.equal(closings[0].decision, "approved");
 });
 
 test("an idle timeout closes a review nobody visited or polled", async (t) => {
@@ -404,6 +440,7 @@ test("an idle timeout closes a review nobody visited or polled", async (t) => {
   assert.equal(closings.length, 1);
   assert.equal(closings[0].reason, "idle");
   assert.equal(closings[0].feedback, "");
+  assert.equal(closings[0].decision, null);
 });
 
 test("a heartbeat cancels the idle timeout", async (t) => {
@@ -440,5 +477,6 @@ test("shutdown closes the review as stopped and asks the process to exit", async
   assert.equal(await closed(), true);
   assert.equal(closings.length, 1);
   assert.equal(closings[0].reason, "stopped");
+  assert.equal(closings[0].decision, null);
   assert.equal(shutdowns.length, 1);
 });

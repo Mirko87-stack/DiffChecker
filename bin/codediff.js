@@ -163,6 +163,9 @@ function nextStep(reply, target) {
     return `Answer this question (pipe your answer to: node "${BIN}" answer --id ${reply.id} ${target}), then run wait again.`;
   }
   if (reply.status === "idle") return "No question yet. Run wait again now; do not end your turn.";
+  if (reply.status === "closed" && reply.decision === "approved") {
+    return "The reviewer approved the diff. Tell the user and finish the task; make no further changes unless asked.";
+  }
   if (reply.status === "closed") return "The review is over. Summarise the feedback for the user and act on it.";
   return "The viewer is not running. Tell the user and continue in the CLI.";
 }

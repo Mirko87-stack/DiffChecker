@@ -72,8 +72,9 @@ permissions; it only asks you to resume the loop. Pass `--no-wake` to `open` to 
      answer it (step 4), then run `wait` again. `"redelivered": true` means you received it
      before but never answered it (a lost reply or an interrupted turn): answer it now.
    - `{ "status": "idle" }` — nobody asked yet; run `wait` again.
-   - `{ "status": "closed", "feedback", "reason", "transcript" }` — the review is over; go to
-     step 5. The viewer exits a minute after the review closes (or after 30 minutes with no
+   - `{ "status": "closed", "feedback", "reason", "decision", "transcript" }` — the review is
+     over; go to step 5. `decision` is `"approved"` (the reviewer clicked "Approve diff"),
+     `"changes"` (they clicked "Done reviewing") or `null` (the tab closed, or the viewer stopped). The viewer exits a minute after the review closes (or after 30 minutes with no
      visit and no `wait`, reason `idle`), but it saves this reply first: a later `wait` still
      prints it once.
    - `{ "status": "gone" }` — the viewer is no longer running and left no reply; go to step 5.
@@ -114,8 +115,9 @@ permissions; it only asks you to resume the loop. Pass `--no-wake` to `open` to 
    reviewer to confirm. After editing files outside an answer, run
    `diffchecker refresh --repo "<repo>"` so the viewer does not show a stale diff.
 
-5. Stop looping. Summarise the reviewer's feedback (and the questions in `transcript`) for the
-   user, then act on it here in the CLI. An empty feedback with reason `viewer closed` means
+5. Stop looping. With `decision: "approved"`, tell the user the reviewer approved the diff and
+   finish the task: make no further changes unless they ask. Otherwise summarise the reviewer's
+   feedback (and the questions in `transcript`) for the user, then act on it here in the CLI. An empty feedback with reason `viewer closed` means
    the tab was closed without a message: ask the user how they want to proceed.
    If the session wakes you with a note that the review was closed, run the `wait` it names.
    To end a viewer early, run `diffchecker stop --repo "<repo>"`; a new `open` on the same

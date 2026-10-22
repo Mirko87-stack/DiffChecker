@@ -78,6 +78,13 @@ abbr[title] { text-decoration: none; }
 }
 
 /* Live mode: ending the review is a quiet control; the closing note gets the highlighter rule. */
+.review-actions {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: flex-end;
+  gap: 8px;
+}
+.review-actions:not(:has(> :not([hidden]))) { display: none; }
 .finish-open { color: var(--muted); }
 .finish-open[aria-expanded="true"] { color: var(--paper); border-color: var(--muted); }
 .finish, .finished { grid-column: 1 / -1; margin-top: 24px; max-width: var(--measure); }
@@ -114,6 +121,38 @@ abbr[title] { text-decoration: none; }
   padding: 4px 0 4px 16px;
   border-left: 4px solid var(--highlighter);
   font-size: var(--step-1);
+}
+.finished:focus { outline: none; }
+
+/* Approving is the one confident action: a highlighter outline, filled while it asks for confirmation. */
+.approve {
+  border-color: var(--highlighter);
+  transition: background-color 120ms ease-out, color 120ms ease-out;
+}
+.approve:hover { background: rgb(244 207 93 / 0.1); border-color: var(--highlighter); }
+.approve.armed { background: var(--highlighter); color: var(--night); font-weight: 600; }
+.approve[hidden], .approve-end[hidden] { display: none; }
+.approve-error { grid-column: 1 / -1; font-size: var(--small); color: var(--removed); }
+.approve-error:empty { display: none; }
+.masthead > .approve-error { margin-top: 12px; justify-self: end; }
+/* After the last file: the same rule that separates the files, then the button on its own. */
+.approve-end {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px 16px;
+  padding-top: 32px;
+  border-top: 1px solid var(--rule);
+}
+.approve-end .approve { padding: 6px 16px; font-size: var(--step-0); }
+
+.visually-hidden {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  overflow: hidden;
+  clip-path: inset(50%);
+  white-space: nowrap;
 }
 
 /* minmax(0, 1fr): long diff lines scroll inside their pane instead of widening the page. */
@@ -532,7 +571,8 @@ pre span { display: block; padding: 0 12px; }
 @media (max-width: 900px) {
   :root { --gutter: 20px; }
   .masthead { padding: 32px var(--gutter) 24px; }
-  .finish-open { grid-column: 1 / -1; justify-self: start; margin-top: 16px; }
+  .review-actions { grid-column: 1 / -1; justify-content: flex-start; margin-top: 16px; }
+  .masthead > .approve-error { justify-self: start; }
   .masthead h1 { font-size: var(--step-3); }
   .layout { grid-template-columns: minmax(0, 1fr); gap: 0; }
   /* No resizing or hiding here: the stored hidden state is ignored and the list stays reachable. */
@@ -562,6 +602,6 @@ pre span { display: block; padding: 0 12px; }
 }
 
 @media (prefers-reduced-motion: reduce) {
-  #files a, .rail-handle::before { transition: none; }
+  #files a, .rail-handle::before, .approve { transition: none; }
   .ask { animation: none; }
 }

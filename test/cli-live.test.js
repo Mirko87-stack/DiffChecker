@@ -164,6 +164,7 @@ test("open --detach, wait, answer and close drive a live review end to end", asy
   const closed = JSON.parse((await cli(["wait", "--url", url, "--timeout", "5"])).stdout);
   assert.equal(closed.status, "closed");
   assert.equal(closed.feedback, "Ship it");
+  assert.equal(closed.decision, "changes");
   assert.equal(closed.transcript[0].answer, answer);
   assert.equal(closed.next, "The review is over. Summarise the feedback for the user and act on it.");
 

@@ -523,7 +523,7 @@ const stale = document.getElementById("stale");
 stale.append(showUpdatedButton());
 if (review.live) startLiveReview();
 
-// Presence polling and "Done reviewing".
+// Presence polling, "Done reviewing" and "Approve diff".
 function startLiveReview() {
   const openButton = document.getElementById("finish-open");
   const panel = document.getElementById("finish");
@@ -547,7 +547,7 @@ function startLiveReview() {
       const res = await fetch("/api/review/close", {
         method: "POST",
         headers: { "content-type": "application/json" },
-        body: JSON.stringify({ feedback: feedback.value.trim() }),
+        body: JSON.stringify({ feedback: feedback.value.trim(), decision: "changes" }),
       });
       if (!res.ok) throw new Error(`the server replied ${res.status}`);
       finish("Review sent. The agent continues in its own window; you can close this tab.");
@@ -581,17 +581,89 @@ function startLiveReview() {
   document.addEventListener("visibilitychange", () => {
     if (!review.closed && !document.hidden) poll();
   });
+  const approval = startApproval(finish);
 
-  function finish(message) {
+  function finish(message, { focus = false } = {}) {
     review.closed = true;
     timers.forEach(clearInterval);
     openButton.hidden = true;
     panel.hidden = true;
-    Object.assign(document.getElementById("finished"), { textContent: message, hidden: false });
+    approval.hide();
+    const finished = document.getElementById("finished");
+    Object.assign(finished, { textContent: message, hidden: false });
+    if (focus) finished.focus();
     ask.by.textContent = presence();
     showPresence();
     if (current) renderAsk();
   }
+}
+
+// "Approve diff" at the top and after the last file. Approving ends the review, so it takes two
+// clicks: the first turns both buttons into "Confirm approval" for a few seconds.
+function startApproval(finish) {
+  const CONFIRM_MS = 4000;
+  const buttons = [...document.querySelectorAll(".approve")];
+  const end = document.getElementById("approve-end");
+  const hint = document.getElementById("approve-hint");
+  let armed = null; // the timer that reverts the buttons
+  let armedAt = 0;
+  const errorFor = (button) => (end.contains(button) ? end : document.querySelector(".masthead")).querySelector(".approve-error");
+  const label = (text) => buttons.forEach((button) => (button.textContent = text));
+
+  const disarm = () => {
+    clearTimeout(armed);
+    armed = null;
+    label("Approve diff");
+    buttons.forEach((button) => button.classList.remove("armed"));
+    hint.textContent = "";
+  };
+  const arm = () => {
+    label("Confirm approval");
+    buttons.forEach((button) => button.classList.add("armed"));
+    hint.textContent = "Click Confirm approval to approve the diff and end the review.";
+    armed = setTimeout(disarm, CONFIRM_MS);
+    armedAt = Date.now();
+  };
+
+  const approve = async (button) => {
+    document.querySelectorAll(".approve-error").forEach((error) => (error.textContent = ""));
+    if (!armed) return arm();
+    // A double click is one intent, not a confirmation.
+    if (Date.now() - armedAt < 400) return;
+    clearTimeout(armed);
+    buttons.forEach((b) => (b.disabled = true));
+    try {
+      const res = await fetch("/api/review/close", {
+        method: "POST",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({ decision: "approved" }),
+      });
+      if (!res.ok) throw new Error(`the server replied ${res.status}`);
+    } catch (failure) {
+      buttons.forEach((b) => (b.disabled = false));
+      disarm();
+      errorFor(button).textContent = `Could not approve: ${failure.message}.`;
+      return;
+    }
+    finish("Diff approved. The agent has been told; you can close this tab.", { focus: true });
+    // Most tabs opened from a terminal cannot be closed by script; the message then stays.
+    window.close();
+  };
+
+  for (const button of buttons) {
+    button.hidden = false;
+    button.addEventListener("click", () => approve(button));
+  }
+  end.hidden = false;
+  document.addEventListener("keydown", (event) => event.key === "Escape" && armed && !buttons[0].disabled && disarm());
+
+  return {
+    hide() {
+      disarm();
+      buttons.forEach((button) => (button.hidden = true));
+      end.hidden = true;
+    },
+  };
 }
 
 // The heartbeat that tells the server the tab is still open; it stops once the review is closed.

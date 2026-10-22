@@ -156,6 +156,7 @@ After a requested correction, inspect **Show the updated diff** when available.
 In live mode, click **Done reviewing**, optionally enter feedback, then click **Send and finish**.
 Wait for **Review sent** before closing the tab.
 Feedback returns to the agent; this action does **not** commit, merge or publish code.
+If nothing needs to change, click **Approve diff** (top or bottom of the page), then **Confirm approval**: the agent is told the diff is approved and finishes the task.
 
 ![Real review completion form with optional feedback and Send and finish](assets/readme/finish-review.png)
 

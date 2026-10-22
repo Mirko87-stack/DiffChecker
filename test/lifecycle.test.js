@@ -102,10 +102,33 @@ test("a closed review nobody waited for leaves its result, the server exits, and
   assert.equal(reply.status, "closed");
   assert.equal(reply.feedback, "Ship it");
   assert.equal(reply.reason, "reviewer finished");
+  assert.equal(reply.decision, "changes");
   assert.equal(reply.next, "The review is over. Summarise the feedback for the user and act on it.");
   assert.ok(!existsSync(codediff("review-result.json")), "the result is consumed once");
 
   assert.equal(JSON.parse((await cli(["wait", "--repo", repo, "--timeout", "1"])).stdout).status, "gone");
+});
+
+test("an approval nobody waited for is saved, and a later wait tells the agent to finish", async (t) => {
+  const { repo, open, codediff } = repoFixture(t);
+  const { url, pid } = await open("--live", "--exit-after-close", "1");
+  await fetch(`${url}api/review/close`, {
+    method: "POST",
+    headers: { "content-type": "application/json" },
+    body: JSON.stringify({ decision: "approved" }),
+  });
+  assert.ok(await until(() => !alive(pid), 6000), "the server exits after the delay");
+  const saved = JSON.parse(readFileSync(codediff("review-result.json"), "utf8"));
+  assert.equal(saved.decision, "approved");
+  assert.equal(saved.reason, "reviewer approved");
+
+  const reply = JSON.parse((await cli(["wait", "--repo", repo, "--timeout", "1"])).stdout);
+  assert.equal(reply.status, "closed");
+  assert.equal(reply.decision, "approved");
+  assert.equal(
+    reply.next,
+    "The reviewer approved the diff. Tell the user and finish the task; make no further changes unless asked.",
+  );
 });
 
 test("open stops the previous server of the repo, and stop stops the current one", async (t) => {

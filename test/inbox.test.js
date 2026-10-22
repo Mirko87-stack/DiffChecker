@@ -171,6 +171,19 @@ test("a review closed while no agent poll is pending sends one note, never the f
   assert.equal(inbox.messages.length, 1);
 });
 
+test("an approval with no agent poll pending sends the approval note, never the feedback", async (t) => {
+  const inbox = await fakeInbox(t);
+  const { call, url, repo } = await liveWithWake(t, { wake: { socket: inbox.socket, token: "tok" } });
+  await call("api/review/close", { decision: "approved", feedback: "The secret sauce is fine" });
+  assert.ok(await until(() => inbox.messages.length === 1));
+  assert.equal(
+    noteText(inbox.messages[0]),
+    `DiffChecker: the reviewer approved the review at ${url}. Run: node "${BIN}" wait --repo "${resolve(repo)}" to get the result.`,
+  );
+  await pause(200);
+  assert.equal(inbox.messages.length, 1);
+});
+
 test("no close note when an agent poll receives the closed reply", async (t) => {
   const inbox = await fakeInbox(t);
   const { call } = await liveWithWake(t, { wake: { socket: inbox.socket, token: "tok" } });

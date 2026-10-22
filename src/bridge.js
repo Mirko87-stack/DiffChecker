@@ -27,7 +27,7 @@ export function createBridge({
   let nextId = 1;
   let agentPoll = null; // { resolve, timer }
   let lastSeen = null; // when a poll last started or ended
-  let closed = null; // { feedback, reason }
+  let closed = null; // { feedback, reason, decision }
   const tabs = new Map(); // tab id -> timer that drops the tab when its beats stop
   // A closing tab turns hidden first, so its last beat can arrive after the beacon; a reload gets a new id.
   const closedTabs = new Set();
@@ -83,6 +83,7 @@ export function createBridge({
       status: "closed",
       feedback: closed.feedback,
       reason: closed.reason,
+      decision: closed.decision,
       transcript: [...questions.values()].map((q) => ({
         file: q.file,
         hunkHeader: q.hunk.header,
@@ -117,9 +118,10 @@ export function createBridge({
     tabs.delete(tab);
   }
 
-  function close(feedback = "", reason = "reviewer finished") {
+  // decision: "approved" or "changes" when the reviewer ended it; null when the review just stopped.
+  function close(feedback = "", reason = "reviewer finished", decision = null) {
     if (closed) return;
-    closed = { feedback, reason };
+    closed = { feedback, reason, decision };
     stopTabTimers();
     armIdle();
     nudger.dispose();
